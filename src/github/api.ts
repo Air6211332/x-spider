@@ -2,7 +2,7 @@ import { request } from '../ipc/network';
 import * as R from 'ramda';
 
 export async function getLatestReleases(pre = false) {
-  let url = 'https://api.github.com/repos/MiningCattiva/x-spider/releases';
+  let url = 'https://api.github.com/repos/Air6211332/x-spider/releases';
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const resp = await request({

@@ -63,12 +63,7 @@ export const Favorites: React.FC = () => {
   }, [items, keyword, selectedTags, untaggedOnly]);
 
   const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      const ta = a.lastStartedAt ?? 0;
-      const tb = b.lastStartedAt ?? 0;
-      if (tb !== ta) return tb - ta;
-      return b.favoritedAt - a.favoritedAt;
-    });
+    return [...filtered].sort((a, b) => b.favoritedAt - a.favoritedAt);
   }, [filtered]);
 
   const hasFilter =

@@ -6,9 +6,11 @@ import {
   InfoCircleFilled,
   StarFilled,
   ThunderboltFilled,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { Homepage } from '../pages/Homepage';
 import { Favorites } from '../pages/Favorites';
+import { Following } from '../pages/Following';
 import { AutoDownload } from '../pages/AutoDownload';
 import { DownloadManagement } from '../pages/DownloadManagement';
 import { Settings } from '../pages/Settings';
@@ -20,6 +22,12 @@ export const ROUTES: Route[] = [
     name: '主页',
     icon: <HomeFilled />,
     element: <Homepage />,
+  },
+  {
+    id: 'following',
+    name: '我的关注',
+    icon: <TeamOutlined />,
+    element: <Following />,
   },
   {
     id: 'favorites',

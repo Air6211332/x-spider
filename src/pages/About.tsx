@@ -6,7 +6,6 @@ import { useCheckUpdate } from '../hooks/useCheckUpdate';
 import { useAppStateStore } from '../stores/app-state';
 import { isVersionGt } from '../utils/version';
 import { dialog } from '@tauri-apps/api';
-import { Sponsors } from '../components/about/Sponsors';
 
 export const About: React.FC = () => {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
@@ -25,7 +24,7 @@ export const About: React.FC = () => {
       </section>
       <ul className="space-y-2 [&_a]:underline">
         <li>
-          <strong>版本号11：</strong>
+          <strong>版本号：</strong>
           <span>{PACKAGE_JSON_VERSION}</span>
           {isVersionGt(latestVersion, PACKAGE_JSON_VERSION) && (
             <span>
@@ -71,6 +70,16 @@ export const About: React.FC = () => {
         <li>
           <strong>作者：</strong>
           <a
+            href="https://github.com/Air6211332"
+            target="_blank"
+            rel="noreferrer"
+          >
+            米薏 @air6211332
+          </a>
+        </li>
+        <li>
+          <strong>原作者：</strong>
+          <a
             href="https://github.com/MiningCattiva"
             target="_blank"
             rel="noreferrer"
@@ -81,17 +90,17 @@ export const About: React.FC = () => {
         <li>
           <strong>仓库地址：</strong>
           <a
-            href="https://github.com/MiningCattiva/x-spider"
+            href="https://github.com/Air6211332/x-spider"
             target="_blank"
             rel="noreferrer"
           >
-            https://github.com/MiningCattiva/x-spider
+            https://github.com/Air6211332/x-spider
           </a>
         </li>
         <li>
           <strong>开源协议：</strong>
           <a
-            href="https://github.com/MiningCattiva/x-spider/blob/master/LICENSE"
+            href="https://github.com/Air6211332/x-spider/blob/master/LICENSE"
             target="_blank"
             rel="noreferrer"
           >
@@ -99,18 +108,14 @@ export const About: React.FC = () => {
           </a>
         </li>
         <li>
-          <strong>赞助：</strong>
+          <strong>原项目归档（2.2.2）：</strong>
           <a
-            href="https://afdian.net/a/moyuscript"
+            href="https://github.com/MiningCattiva/x-spider"
             target="_blank"
             rel="noreferrer"
           >
-            爱发电
+            https://github.com/MiningCattiva/x-spider
           </a>
-        </li>
-        <li>
-          <strong>赞助名单：</strong>
-          <Sponsors />
         </li>
       </ul>
     </>

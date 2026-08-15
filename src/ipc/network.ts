@@ -3,12 +3,43 @@ import { Response } from '../interfaces/Response';
 import { RequestOptions } from '../interfaces/RequestOptions';
 import * as R from 'ramda';
 import { useSettingsStore } from '../stores/settings';
+import { useAppStateStore } from '../stores/app-state';
 import { delay } from '../utils';
 
 const MAX_RETRY_COUNT = 16;
 const MAX_RETRY_DELAY = 16000;
 
 let log: ICategoriedLogger;
+
+/**
+ * 解析实际代理地址。
+ * 勾选「使用系统代理」但系统未开启时，回退到自定义代理 URL（默认 7890），
+ * 避免直连超时导致登录失败。
+ */
+export function resolveProxyUrlForRequest(): {
+  enableProxy: boolean;
+  proxyUrl: string;
+} {
+  const settings = useSettingsStore.getState();
+  if (!settings.proxy.enable) {
+    return { enableProxy: false, proxyUrl: '' };
+  }
+
+  if (settings.proxy.useSystem) {
+    const systemProxyUrl = useAppStateStore.getState().systemProxyUrl;
+    if (systemProxyUrl) {
+      // Rust 侧 proxy_url 为空表示跟随系统；此处传空即可
+      return { enableProxy: true, proxyUrl: '' };
+    }
+    // 系统代理未启用 → 回退自定义地址
+    return {
+      enableProxy: true,
+      proxyUrl: settings.proxy.url || 'http://127.0.0.1:7890',
+    };
+  }
+
+  return { enableProxy: true, proxyUrl: settings.proxy.url };
+}
 
 export async function request(options: RequestOptions) {
   if (!log) {
@@ -22,7 +53,7 @@ export async function request(options: RequestOptions) {
     });
   }
 
-  const settings = useSettingsStore.getState();
+  const { enableProxy, proxyUrl } = resolveProxyUrlForRequest();
   let remainingRetryCount = MAX_RETRY_COUNT;
   let retryDelay = 100;
   let lastErr: any;
@@ -33,8 +64,8 @@ export async function request(options: RequestOptions) {
         R.defaultTo('GET', options.method),
         url.href,
         R.defaultTo('', options.body),
-        settings.proxy.enable,
-        settings.proxy.useSystem ? '' : settings.proxy.url,
+        enableProxy,
+        proxyUrl,
         R.defaultTo({}, options.headers),
         options.responseType,
       );

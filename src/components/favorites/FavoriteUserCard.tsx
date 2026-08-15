@@ -5,10 +5,11 @@ import {
   EditOutlined,
   HomeOutlined,
 } from '@ant-design/icons';
-import { App, Avatar, Button, Input, Modal, Select, Space, Tag } from 'antd';
+import { App, Button, Input, Modal, Select, Space, Tag } from 'antd';
 import dayjs from 'dayjs';
 import React, { useEffect, useState } from 'react';
 import { AddToAutoDownloadListButton } from '../auto-download/AddToAutoDownloadListButton';
+import { CachedAvatar } from '../CachedAvatar';
 import { FavoriteUser } from '../../interfaces/FavoriteUser';
 import { useAppStateStore } from '../../stores/app-state';
 import { useDownloadStore } from '../../stores/download';
@@ -150,7 +151,11 @@ export const FavoriteUserCard: React.FC<FavoriteUserCardProps> = ({
   return (
     <article className="p-4 bg-white border rounded-md flex flex-col gap-3">
       <div className="flex items-center gap-3 min-w-0">
-        <Avatar src={item.avatar} size={48} />
+        <CachedAvatar
+          screenName={item.screenName}
+          src={item.avatar}
+          size={48}
+        />
         <div className="min-w-0 grow">
           <div className="font-medium truncate">{titleText}</div>
           <a

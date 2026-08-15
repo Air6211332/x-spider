@@ -9,6 +9,7 @@ import FormItem from 'antd/es/form/FormItem';
 import { useForm } from 'antd/es/form/Form';
 import { parseCookie, stringifyCookie } from '../utils/cookie';
 import clsx from 'clsx';
+import { CachedAvatar } from './CachedAvatar';
 
 export const Account: React.FC = () => {
   const [cookieString, setCookieString] = useAppStateStore((state) => [
@@ -21,6 +22,7 @@ export const Account: React.FC = () => {
     null,
   );
   const [loading, setLoading] = useState(false);
+  const [rawCookie, setRawCookie] = useState('');
   const [form] = useForm();
   const { message } = App.useApp();
 
@@ -43,24 +45,50 @@ export const Account: React.FC = () => {
     })();
   }, [cookieString]);
 
-  const onFormFinished = async (values: any) => {
+  const applyCookieAndLogin = async (nextCookie: string) => {
+    const parsed = parseCookie(nextCookie);
+    if (!parsed.auth_token || !parsed.ct0) {
+      message.error('Cookie 中需包含 auth_token 与 ct0');
+      return;
+    }
     setModalLoading(true);
-    const newCookieString = stringifyCookie(values);
-
     try {
-      const accountInfo = await getAccountInfo(newCookieString);
+      // 保留完整 Cookie（含 twid），不要只存两个字段
+      const accountInfo = await getAccountInfo(nextCookie);
       setAccountInfo(accountInfo);
       setModalOpen(false);
-      setCookieString(newCookieString);
+      setCookieString(nextCookie);
+      form.setFieldsValue({
+        auth_token: parsed.auth_token,
+        ct0: parsed.ct0,
+      });
+      setRawCookie('');
     } catch (err: any) {
       log.error(err);
-      message.error('无法登录，请检查 Cookie 或代理配置是否正确');
+      message.error(
+        err?.message
+          ? `无法登录：${err.message}`
+          : '无法登录，请检查 Cookie 或代理配置是否正确',
+      );
     } finally {
       setModalLoading(false);
     }
   };
 
+  const onFormFinished = async (values: any) => {
+    // 若粘贴了完整 Cookie，优先用完整串；否则用表单字段拼装
+    if (rawCookie.trim()) {
+      await applyCookieAndLogin(rawCookie.trim());
+      return;
+    }
+    await applyCookieAndLogin(stringifyCookie(values));
+  };
+
   const onModalOk = async () => {
+    if (rawCookie.trim()) {
+      await applyCookieAndLogin(rawCookie.trim());
+      return;
+    }
     form.submit();
   };
 
@@ -103,7 +131,12 @@ export const Account: React.FC = () => {
                 href={`https://twitter.com/${accountInfo.screenName}`}
                 rel="noreferrer"
               >
-                <Avatar size={50} src={accountInfo.avatar} alt="头像" />
+                <CachedAvatar
+                  size={50}
+                  screenName={accountInfo.screenName}
+                  src={accountInfo.avatar}
+                  alt="头像"
+                />
               </a>
               <div className="text-white mt-1 font-bold">
                 {accountInfo.screenName}
@@ -130,10 +163,21 @@ export const Account: React.FC = () => {
         open={modalOpen}
         title="设置 Twitter 的 Cookie"
       >
+        <div className="mt-2 mb-3">
+          <div className="mb-1 text-sm text-gray-600">
+            推荐：粘贴浏览器完整 Cookie（含 twid）
+          </div>
+          <Input.TextArea
+            rows={4}
+            value={rawCookie}
+            onChange={(e) => setRawCookie(e.target.value)}
+            placeholder="guest_id=...; auth_token=...; ct0=...; twid=u%3D..."
+          />
+        </div>
         <Form
           labelCol={{ span: 5 }}
           form={form}
-          className="mt-4"
+          className="mt-2"
           onFinish={onFormFinished}
           initialValues={cookies}
         >
@@ -143,7 +187,7 @@ export const Account: React.FC = () => {
             rules={[
               {
                 type: 'string',
-                required: true,
+                required: !rawCookie.trim(),
               },
             ]}
           >
@@ -155,7 +199,7 @@ export const Account: React.FC = () => {
             rules={[
               {
                 type: 'string',
-                required: true,
+                required: !rawCookie.trim(),
               },
             ]}
           >
@@ -166,20 +210,17 @@ export const Account: React.FC = () => {
           <button
             onClick={() => {
               Modal.confirm({
-                title: '寻找 CookieString 的方法',
+                title: '寻找 Cookie 的方法',
                 icon: null,
                 content: (
                   <>
-                    <p>1. 打开推特并登录。</p>
+                    <p>1. 打开 x.com 并登录。</p>
                     <p>2. 按【F12】打开开发者工具。</p>
                     <p>3. 找到【应用程序（Applications）】选项卡。</p>
+                    <p>4. 在左侧【Cookie】中选中【https://x.com】。</p>
                     <p>
-                      4.
-                      在左侧列表中找到【Cookie】，展开并选中【https://twitter.com】。
-                    </p>
-                    <p>
-                      5.
-                      在右侧找到名称为【auth_token】和【ct0】的项目，复制相应值填写表单即可。
+                      5. 可复制完整 Cookie，或单独填写 auth_token、ct0（建议带上
+                      twid）。
                     </p>
                   </>
                 ),
@@ -191,7 +232,7 @@ export const Account: React.FC = () => {
               className="transform translate-y-[0.6px]"
               aria-hidden
             />
-            <span className="ml-1">寻找 CookieString 的方法</span>
+            <span className="ml-1">寻找 Cookie 的方法</span>
           </button>
         </p>
         {modalLoading && (

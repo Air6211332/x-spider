@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { aria2 } from '../utils/aria2';
+import { useFollowingStore } from '../stores/following';
 
 export function useBootstrap() {
   const [ready, setReady] = useState(false);
@@ -21,6 +22,12 @@ export function useBootstrap() {
               log.error(err);
               throw new Error('启动 Aria 失败 ');
             }
+          },
+        },
+        {
+          name: 'following-db',
+          async fn() {
+            await useFollowingStore.getState().bootstrap();
           },
         },
       ];
