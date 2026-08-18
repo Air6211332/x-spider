@@ -21,7 +21,7 @@ export const CreationTasks: React.FC = () => {
           <li className="flex items-center justify-between" key={t.id}>
             <a
               href={
-                t.user?.screenName
+                t.user?.screenName && t.kind === 'user'
                   ? buildUserUrl(t.user.screenName)
                   : 'javascript:void(0);'
               }
@@ -31,7 +31,13 @@ export const CreationTasks: React.FC = () => {
             >
               <Avatar size={20} src={t.user.avatar} className="shrink-0" />
               <span className="whitespace-nowrap overflow-hidden text-ellipsis">
-                {`${t.user?.name || '未知用户'} ${t.user?.screenName ? `@${t.user.screenName}` : ''}`}
+                {t.kind === 'bookmarks'
+                  ? '书签'
+                  : t.kind === 'likes'
+                    ? '喜欢'
+                    : t.kind === 'list'
+                      ? `列表：${t.listName || t.user?.name || t.listId}`
+                      : `${t.user?.name || '未知用户'} ${t.user?.screenName ? `@${t.user.screenName}` : ''}`}
               </span>
             </a>
             <div className="flex items-center space-x-2 shrink-0">

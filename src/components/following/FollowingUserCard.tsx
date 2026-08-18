@@ -5,6 +5,7 @@ import {
   EditOutlined,
   HomeOutlined,
   StarOutlined,
+  UserDeleteOutlined,
 } from '@ant-design/icons';
 import { App, Button, Input, Modal, Select, Space, Tag } from 'antd';
 import dayjs from 'dayjs';
@@ -52,6 +53,7 @@ export const FollowingUserCard: React.FC<FollowingUserCardProps> = ({
 }) => {
   const { message, modal } = App.useApp();
   const removeFollowing = useFollowingStore((s) => s.removeFollowing);
+  const unfollowAndRemove = useFollowingStore((s) => s.unfollowAndRemove);
   const updateFollowingMeta = useFollowingStore((s) => s.updateFollowingMeta);
   const addFavorite = useFavoritesStore((s) => s.addFavorite);
   const isFavorite = useFavoritesStore((s) => s.isFavorite(item.id));
@@ -68,6 +70,7 @@ export const FollowingUserCard: React.FC<FollowingUserCardProps> = ({
   const setRouteById = useRouteStore((s) => s.setRouteById);
 
   const [editOpen, setEditOpen] = useState(false);
+  const [unfollowing, setUnfollowing] = useState(false);
   const [noteNameDraft, setNoteNameDraft] = useState(item.noteName ?? '');
   const [noteDraft, setNoteDraft] = useState(item.note ?? '');
   const [tagsDraft, setTagsDraft] = useState<string[]>(item.tags ?? []);
@@ -156,15 +159,43 @@ export const FollowingUserCard: React.FC<FollowingUserCardProps> = ({
 
   const onRemove = () => {
     modal.confirm({
-      title: '从本地关注列表删除？',
+      title: '仅从本地关注列表删除？',
       content:
         '仅删除本机记录，不会在 X 上取消关注。下次全量同步时若仍关注则会再次出现。',
-      okText: '删除',
+      okText: '仅本地删除',
       okType: 'danger',
       cancelText: '取消',
       onOk: async () => {
         await removeFollowing(item.id);
         message.success('已从本地列表删除');
+      },
+    });
+  };
+
+  const onUnfollowAndRemove = () => {
+    if (!item.id) {
+      message.warning('缺少用户 ID，无法取消关注');
+      return;
+    }
+    modal.confirm({
+      title: '取消关注并删除？',
+      content:
+        '将在 X 上取消关注该账号，并删除本机记录。此操作不可轻易撤销，请确认。',
+      okText: '取消关注并删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        setUnfollowing(true);
+        try {
+          await unfollowAndRemove(item.id);
+          message.success('已取消关注并从本地删除');
+        } catch (err: any) {
+          log.error(err);
+          message.error(err?.message || '取消关注失败，本地记录未删除');
+          throw err;
+        } finally {
+          setUnfollowing(false);
+        }
       },
     });
   };
@@ -294,10 +325,11 @@ export const FollowingUserCard: React.FC<FollowingUserCardProps> = ({
           disabled={isFavorite || item.unavailable || !item.screenName}
           onClick={onAddFavorite}
         >
-          {isFavorite ? '已收藏' : '加入收藏'}
+          {isFavorite ? '已收藏' : '收藏'}
         </Button>
         <AddToAutoDownloadListButton
           size="small"
+          label="清单"
           user={followingToTwitterUser(item)}
           disabled={item.unavailable || !item.screenName}
         />
@@ -307,7 +339,7 @@ export const FollowingUserCard: React.FC<FollowingUserCardProps> = ({
           disabled={!item.screenName}
           onClick={goHomeAndLoad}
         >
-          加载到主页
+          主页
         </Button>
         <Button
           size="small"
@@ -316,15 +348,26 @@ export const FollowingUserCard: React.FC<FollowingUserCardProps> = ({
           disabled={item.unavailable || !item.screenName}
           onClick={onStartDownload}
         >
-          开始下载
+          下载
+        </Button>
+        <Button
+          size="small"
+          danger
+          icon={<UserDeleteOutlined />}
+          loading={unfollowing}
+          disabled={!item.id || unfollowing}
+          onClick={onUnfollowAndRemove}
+        >
+          取关删除
         </Button>
         <Button
           size="small"
           danger
           icon={<DeleteOutlined />}
+          disabled={unfollowing}
           onClick={onRemove}
         >
-          删除
+          仅删除
         </Button>
       </Space>
 

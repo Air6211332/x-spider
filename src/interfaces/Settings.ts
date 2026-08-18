@@ -34,4 +34,11 @@ export interface Settings_V2 {
   };
 }
 
-export type Settings = Settings_V2;
+export interface Settings_V3 extends Settings_V2 {
+  /** 同步类 GraphQL 翻页 / 活跃度请求全局最小间隔（毫秒） */
+  sync: {
+    pageIntervalMs: number;
+  };
+}
+
+export type Settings = Settings_V3;

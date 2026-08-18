@@ -51,6 +51,12 @@ export const useSettingsStore = create(
         if (version === 1) {
           delete state.download.savePath;
         }
+        if (version < 3) {
+          state.sync = state.sync || { pageIntervalMs: 1200 };
+          if (typeof state.sync.pageIntervalMs !== 'number') {
+            state.sync.pageIntervalMs = 1200;
+          }
+        }
 
         return state;
       },

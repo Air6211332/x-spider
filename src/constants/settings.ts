@@ -18,6 +18,9 @@ export const DEFAULT_SETTINGS: Settings = {
     acceptPrerelease: false,
     writeLogs: false,
   },
+  sync: {
+    pageIntervalMs: 1200,
+  },
 };
 
-export const CURRENT_SETTINGS_VERSION = 2;
+export const CURRENT_SETTINGS_VERSION = 3;

@@ -14,6 +14,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FollowingUserCard } from '../components/following/FollowingUserCard';
 import { PageHeader } from '../components/PageHeader';
 import { ActivityEnqueueMode, useFollowingStore } from '../stores/following';
+import { useRouteStore } from '../stores/route';
 
 type ActivityFilter =
   | 'all'
@@ -21,6 +22,9 @@ type ActivityFilter =
   | 'unavailable'
   | 'unchecked'
   | 'locked';
+
+/** 互关筛选 */
+type MutualFilter = 'all' | 'mutual' | 'non_mutual';
 
 const DEFAULT_PAGE_SIZE = 24;
 const PAGE_SIZE_OPTIONS = ['12', '24', '48', '96'];
@@ -31,13 +35,13 @@ function hasNoTags(tags?: string[]) {
 
 export const Following: React.FC = () => {
   const { message } = App.useApp();
+  const setRouteById = useRouteStore((s) => s.setRouteById);
 
   const ready = useFollowingStore((s) => s.ready);
   const items = useFollowingStore((s) => s.items);
   const lastSyncAt = useFollowingStore((s) => s.lastSyncAt);
   const lastFullSyncAt = useFollowingStore((s) => s.lastFullSyncAt);
   const syncing = useFollowingStore((s) => s.syncing);
-  const syncProgress = useFollowingStore((s) => s.syncProgress);
   const activityRunning = useFollowingStore((s) => s.activityRunning);
   const activityQueueRemaining = useFollowingStore(
     (s) => s.activityQueueRemaining,
@@ -58,6 +62,7 @@ export const Following: React.FC = () => {
 
   const [keyword, setSearchKeyword] = useState('');
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
+  const [mutualFilter, setMutualFilter] = useState<MutualFilter>('all');
   const [inactiveDays, setInactiveDays] = useState(90);
   const [enqueueMode, setEnqueueMode] =
     useState<ActivityEnqueueMode>('unchecked');
@@ -118,6 +123,9 @@ export const Following: React.FC = () => {
         if (item.lastTweetAt >= cutoff) return false;
       }
 
+      if (mutualFilter === 'mutual' && !item.followedBy) return false;
+      if (mutualFilter === 'non_mutual' && item.followedBy) return false;
+
       if (untaggedOnly) {
         if (!hasNoTags(item.tags)) return false;
       } else if (selectedTags.length > 0) {
@@ -167,6 +175,7 @@ export const Following: React.FC = () => {
     items,
     keyword,
     activityFilter,
+    mutualFilter,
     inactiveDays,
     selectedTags,
     untaggedOnly,
@@ -188,6 +197,7 @@ export const Following: React.FC = () => {
   }, [
     keyword,
     activityFilter,
+    mutualFilter,
     inactiveDays,
     selectedTags,
     untaggedOnly,
@@ -206,6 +216,7 @@ export const Following: React.FC = () => {
     selectedTags.length > 0 ||
     untaggedOnly ||
     activityFilter !== 'all' ||
+    mutualFilter !== 'all' ||
     maxFriendsCount != null ||
     maxStatusesCount != null ||
     maxFollowersCount != null;
@@ -230,6 +241,7 @@ export const Following: React.FC = () => {
     setSelectedTags([]);
     setUntaggedOnly(false);
     setActivityFilter('all');
+    setMutualFilter('all');
     setMaxFriendsCount(null);
     setMaxStatusesCount(null);
     setMaxFollowersCount(null);
@@ -324,9 +336,17 @@ export const Following: React.FC = () => {
                 ? dayjs(lastFullSyncAt).format('YYYY-MM-DD HH:mm:ss')
                 : '从未'}
             </span>
-            {(syncing || syncProgress.message) && (
-              <span className="text-ant-color-primary">
-                {syncProgress.message}
+            {syncing && (
+              <span className="inline-flex items-center gap-1 text-ant-color-primary">
+                同步进行中
+                <Button
+                  type="link"
+                  size="small"
+                  className="!p-0"
+                  onClick={() => setRouteById('queue-management')}
+                >
+                  打开队列管理
+                </Button>
               </span>
             )}
             <span>
@@ -366,6 +386,16 @@ export const Following: React.FC = () => {
                     { value: 'unavailable', label: '失效' },
                     { value: 'unchecked', label: '未检查活跃度' },
                     { value: 'locked', label: '锁推无法读' },
+                  ]}
+                />
+                <Select
+                  value={mutualFilter}
+                  onChange={setMutualFilter}
+                  className="w-32"
+                  options={[
+                    { value: 'all', label: '全部关系' },
+                    { value: 'mutual', label: '互关' },
+                    { value: 'non_mutual', label: '非互关' },
                   ]}
                 />
                 {activityFilter === 'inactive' && (

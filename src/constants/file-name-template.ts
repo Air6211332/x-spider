@@ -155,10 +155,7 @@ export const REPLACER_MAP: Record<
   },
   TAGS: {
     desc: '推文标签',
-    replacer: R.pipe(
-      // @ts-ignore
-      R.path(['post', 'tags']),
-      R.join(','),
-    ),
+    // 书签/喜欢等落库帖可能没有 tags，需避免对 undefined 调用 join
+    replacer: (data) => (data.post.tags ?? []).join(','),
   },
 };

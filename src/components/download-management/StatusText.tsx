@@ -3,6 +3,7 @@ import React from 'react';
 import { DownloadTask } from '../../interfaces/DownloadTask';
 import * as R from 'ramda';
 import clsx from 'clsx';
+import { formatBytesPerSec } from '../../utils/format-speed';
 
 export interface StatusTextProps {
   task: DownloadTask;
@@ -11,7 +12,10 @@ export interface StatusTextProps {
 export const StatusText: React.FC<StatusTextProps> = ({ task }) => {
   const [text, className] = R.cond<[DownloadTask], string[]>([
     [R.propEq('waiting', 'status'), R.always(['🟡等待中', 'text-gray-500'])],
-    [R.propEq('active', 'status'), R.always(['▶︎下载中', ''])],
+    [
+      R.propEq('active', 'status'),
+      (t) => [`▶︎下载中 ${formatBytesPerSec(t.downloadSpeed || 0)}`, ''],
+    ],
     [
       R.propEq('error', 'status'),
       (task) => [`❌️下载错误：${task.error || '未知原因'}`, 'text-red-500'],

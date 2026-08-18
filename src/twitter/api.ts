@@ -11,6 +11,7 @@ import {
 } from '../interfaces/TwitterMedia';
 import { TwitterPost } from '../interfaces/TwitterPost';
 import { TwitterUser } from '../interfaces/TwitterUser';
+import { TwitterList } from '../interfaces/TwitterList';
 import { request } from '../ipc/network';
 import { useAppStateStore } from '../stores/app-state';
 import { parseCookie } from '../utils/cookie';
@@ -23,6 +24,44 @@ const HOST = 'x.com';
 const FOLLOWING_QUERY_ID = 'C1qZ6bs-L3oc_TKSZyxkXQ';
 /** UserTweets（活跃度探测，不过滤无媒体） */
 const USER_TWEETS_QUERY_ID = '9zyyd1hebl7oNWIPdA8HRw';
+/** Bookmarks */
+const BOOKMARKS_QUERY_ID = 'XD0ViOeSOW4YoeNTGjVaYw';
+/** Likes */
+const LIKES_QUERY_ID = 'rk2aeVVvKsyUdG3jf5uiLw';
+/** ListLatestTweetsTimeline */
+const LIST_TIMELINE_QUERY_ID = 'FVWmROVvhgjRPC-4jAUh8A';
+/** ListsManagementPageTimeline（自己的/订阅的列表） */
+const LISTS_MANAGEMENT_QUERY_ID = 'yG0VTYyUVLyU-DQjASBtSg';
+/** TweetDetail（线程会话） */
+const TWEET_DETAIL_QUERY_ID = 'oCon7R-cgWRFy6EfZjaKfg';
+
+/** 时间线类 GraphQL 共用 features（随客户端轮换） */
+const TIMELINE_FEATURES = {
+  rweb_tipjar_consumption_enabled: true,
+  responsive_web_graphql_exclude_directive_enabled: true,
+  verified_phone_label_enabled: false,
+  creator_subscriptions_tweet_preview_api_enabled: true,
+  responsive_web_graphql_timeline_navigation_enabled: true,
+  responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
+  communities_web_enable_tweet_community_results_fetch: true,
+  c9s_tweet_anatomy_moderator_badge_enabled: true,
+  articles_preview_enabled: true,
+  tweetypie_unmention_optimization_enabled: true,
+  responsive_web_edit_tweet_api_enabled: true,
+  graphql_is_translatable_rweb_tweet_is_translatable_enabled: true,
+  view_counts_everywhere_api_enabled: true,
+  longform_notetweets_consumption_enabled: true,
+  responsive_web_twitter_article_tweet_consumption_enabled: true,
+  tweet_awards_web_tipping_enabled: false,
+  creator_subscriptions_quote_tweet_preview_enabled: false,
+  freedom_of_speech_not_reach_fetch_enabled: true,
+  standardized_nudges_misinfo: true,
+  tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: true,
+  rweb_video_timestamps_enabled: true,
+  longform_notetweets_rich_text_read_enabled: true,
+  longform_notetweets_inline_media_enabled: true,
+  responsive_web_enhance_cards_enabled: false,
+};
 
 function getCommonHeaders(withCredentials = true): Record<string, string> {
   const cookies = useAppStateStore.getState().cookieString;
@@ -302,7 +341,8 @@ export async function getUser(screenName: string): Promise<TwitterUser> {
   };
 }
 
-const mapTwitterPosts = (posts: any[]) => {
+/** 将 GraphQL Tweet 结果映射为 TwitterPost */
+export const mapTwitterPosts = (posts: any[]) => {
   const mapTwitterMedias = (medias: any[]) => {
     const toTwitterMediaBase: (v: any) => TwitterMediaBase = (v: any) => {
       return {
@@ -353,6 +393,37 @@ const mapTwitterPosts = (posts: any[]) => {
       R.filter<TwitterMedia | null, TwitterMedia>(R.isNotNil),
     )(medias);
   };
+
+  /** 兼容 X 新结构：身份字段在 result.core，旧版在 result.legacy */
+  const mapTweetUser = (item: any): TwitterUser => {
+    const userResult = item?.core?.user_results?.result;
+    if (!userResult || userResult.__typename === 'UserUnavailable') {
+      return {
+        id: '',
+        screenName: '',
+        name: '',
+        avatar: '',
+        registerTime: dayjs(0),
+      };
+    }
+
+    const core = userResult.core || {};
+    const legacy = userResult.legacy || {};
+    const createdAtRaw = core.created_at || legacy.created_at;
+
+    return {
+      id: String(userResult.rest_id || ''),
+      screenName: core.screen_name || legacy.screen_name || '',
+      name: core.name || legacy.name || '',
+      avatar:
+        userResult.avatar?.image_url || legacy.profile_image_url_https || '',
+      mediaCount: R.isNil(legacy.media_count)
+        ? undefined
+        : Number(legacy.media_count),
+      registerTime: createdAtRaw ? dayjs(createdAtRaw) : dayjs(0),
+    };
+  };
+
   return R.map<any, TwitterPost>((item) => {
     return {
       id: item?.rest_id,
@@ -379,15 +450,7 @@ const mapTwitterPosts = (posts: any[]) => {
         R.path<any>(['legacy', 'entities', 'hashtags']),
         R.ifElse(R.isNotNil, R.map(R.prop('text')), R.always([])),
       )(item),
-      user: {
-        id: item?.core?.user_results?.result?.rest_id,
-        avatar:
-          item?.core?.user_results?.result?.legacy?.profile_image_url_https,
-        mediaCount: item?.core?.user_results?.result?.legacy?.media_count,
-        name: item?.core?.user_results?.result?.legacy?.name,
-        screenName: item?.core?.user_results?.result?.legacy?.screen_name,
-        registerTime: item?.core?.user_results?.result?.legacy?.created_at,
-      },
+      user: mapTweetUser(item),
     };
   })(posts);
 };
@@ -1001,4 +1064,394 @@ export async function getLatestTweetAt(
   }
 
   return { lastTweetAt: null, note: 'empty' };
+}
+
+/** 从推文链接或纯数字 ID 解析 tweetId */
+export function parseTweetIdFromUrl(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  if (/^\d{5,}$/.test(trimmed)) return trimmed;
+  const match =
+    trimmed.match(
+      /(?:twitter\.com|x\.com)\/(?:#!\/)?[\w.]+\/status(?:es)?\/(\d+)/i,
+    ) || trimmed.match(/status(?:es)?\/(\d+)/i);
+  return match?.[1] ?? null;
+}
+
+function unwrapTweetResult(result: any): any {
+  if (!result) return null;
+  if (result.__typename === 'TweetWithVisibilityResults') {
+    return result.tweet ?? null;
+  }
+  if (
+    result.__typename === 'TweetTombstone' ||
+    result.__typename === 'TweetUnavailable'
+  ) {
+    return null;
+  }
+  return result;
+}
+
+/** 从 timeline instructions 提取带媒体的推文（entry 级） */
+function extractTweetResultsFromInstructions(
+  instructions: any[],
+  options?: { requireMedia?: boolean; skipRetweet?: boolean },
+): any[] {
+  const requireMedia = options?.requireMedia !== false;
+  const skipRetweet = options?.skipRetweet !== false;
+  const addEntries = R.find(R.pathEq('TimelineAddEntries', ['type']))(
+    instructions ?? [],
+  ) as any;
+  const rawEntries: any[] = addEntries?.entries ?? [];
+
+  const results: any[] = [];
+
+  const pushResult = (raw: any) => {
+    const tweet = unwrapTweetResult(raw);
+    if (!tweet?.rest_id) return;
+    if (
+      skipRetweet &&
+      R.hasPath(['legacy', 'retweeted_status_result'], tweet)
+    ) {
+      return;
+    }
+    if (requireMedia && !R.path(['legacy', 'entities', 'media', 0], tweet)) {
+      return;
+    }
+    results.push(tweet);
+  };
+
+  for (const entry of rawEntries) {
+    const entryId: string = entry?.entryId ?? '';
+    if (entryId.startsWith('cursor-')) continue;
+
+    if (
+      entryId.startsWith('tweet-') ||
+      entry?.content?.itemContent?.tweet_results
+    ) {
+      pushResult(
+        R.path(['content', 'itemContent', 'tweet_results', 'result'], entry),
+      );
+      continue;
+    }
+
+    const items: any[] =
+      R.path(['content', 'items'], entry) ||
+      R.path(['content', 'itemContent', 'items'], entry) ||
+      [];
+    for (const item of items) {
+      pushResult(
+        R.path(['item', 'itemContent', 'tweet_results', 'result'], item) ||
+          R.path(['itemContent', 'tweet_results', 'result'], item),
+      );
+    }
+  }
+
+  // TimelineAddToModule（加载更多 module）
+  const addToModule = R.find(R.pathEq('TimelineAddToModule', ['type']))(
+    instructions ?? [],
+  ) as any;
+  for (const item of addToModule?.moduleItems ?? []) {
+    pushResult(
+      R.path(['item', 'itemContent', 'tweet_results', 'result'], item),
+    );
+  }
+
+  return results;
+}
+
+function extractBottomCursorFromInstructions(
+  instructions: any[],
+): string | null {
+  const addEntries = R.find(R.pathEq('TimelineAddEntries', ['type']))(
+    instructions ?? [],
+  ) as any;
+  const rawEntries: any[] = addEntries?.entries ?? [];
+  const cursor = R.pipe(
+    R.find(R.pathEq('Bottom', ['content', 'cursorType'])),
+    R.path(['content', 'value']),
+    R.defaultTo(null),
+  )(rawEntries) as string | null;
+  return cursor ? String(cursor) : null;
+}
+
+function resolveInstructions(body: any, paths: string[][]): any[] {
+  for (const p of paths) {
+    const found = R.path<any>(p)(body);
+    if (Array.isArray(found) && found.length > 0) return found;
+  }
+  return [];
+}
+
+/**
+ * 当前登录账号的书签时间线。
+ */
+export async function getBookmarks(
+  cursor?: string,
+  count = 20,
+): Promise<{
+  twitterPosts: TwitterPost[];
+  cursor: string | null;
+}> {
+  const resp = await request({
+    method: 'GET',
+    url: `https://${HOST}/i/api/graphql/${BOOKMARKS_QUERY_ID}/Bookmarks`,
+    responseType: 'json',
+    query: {
+      features: JSON.stringify(TIMELINE_FEATURES),
+      variables: JSON.stringify({
+        count,
+        includePromotedContent: true,
+        ...(cursor ? { cursor } : {}),
+      }),
+    },
+    headers: getCommonHeaders(),
+  });
+  ensureResponse(resp);
+
+  const instructions = resolveInstructions(resp.body, [
+    ['data', 'bookmark_timeline_v2', 'timeline', 'instructions'],
+    ['data', 'bookmark_timeline', 'timeline', 'instructions'],
+  ]);
+  const tweets = extractTweetResultsFromInstructions(instructions);
+  const nextCursor = extractBottomCursorFromInstructions(instructions);
+  const twitterPosts = mapTwitterPosts(tweets);
+
+  return {
+    twitterPosts,
+    cursor: twitterPosts.length === 0 && !nextCursor ? null : nextCursor,
+  };
+}
+
+/**
+ * 指定用户的喜欢时间线（本应用仅用于当前登录用户）。
+ */
+export async function getLikes(
+  userId: string,
+  cursor?: string,
+  count = 20,
+): Promise<{
+  twitterPosts: TwitterPost[];
+  cursor: string | null;
+}> {
+  const resp = await request({
+    method: 'GET',
+    url: `https://${HOST}/i/api/graphql/${LIKES_QUERY_ID}/Likes`,
+    responseType: 'json',
+    query: {
+      features: JSON.stringify(TIMELINE_FEATURES),
+      variables: JSON.stringify({
+        userId,
+        count,
+        includePromotedContent: false,
+        withClientEventToken: false,
+        withBirdwatchNotes: false,
+        withVoice: true,
+        ...(cursor ? { cursor } : {}),
+      }),
+    },
+    headers: getCommonHeaders(),
+  });
+  ensureResponse(resp);
+
+  const instructions = resolveInstructions(resp.body, [
+    ['data', 'user', 'result', 'timeline_v2', 'timeline', 'instructions'],
+    ['data', 'user', 'result', 'timeline', 'timeline', 'instructions'],
+  ]);
+  const tweets = extractTweetResultsFromInstructions(instructions);
+  const nextCursor = extractBottomCursorFromInstructions(instructions);
+  const twitterPosts = mapTwitterPosts(tweets);
+
+  return {
+    twitterPosts,
+    cursor: twitterPosts.length === 0 && !nextCursor ? null : nextCursor,
+  };
+}
+
+function collectListsFromNode(node: any, out: Map<string, TwitterList>) {
+  if (!node || typeof node !== 'object') return;
+
+  const maybeList =
+    node.list ||
+    (node.__typename === 'List' || (node.name && node.member_count != null)
+      ? node
+      : null);
+
+  if (maybeList && (maybeList.id_str || maybeList.id || maybeList.rest_id)) {
+    const id = String(maybeList.id_str || maybeList.id || maybeList.rest_id);
+    if (!out.has(id)) {
+      out.set(id, {
+        id,
+        name: maybeList.name || '',
+        description: maybeList.description || '',
+        memberCount: Number(maybeList.member_count ?? 0),
+        subscriberCount: Number(maybeList.subscriber_count ?? 0),
+        mode: maybeList.mode,
+      });
+    }
+  }
+
+  if (Array.isArray(node)) {
+    for (const item of node) collectListsFromNode(item, out);
+    return;
+  }
+
+  for (const key of Object.keys(node)) {
+    // 避免深挖过大无关字段
+    if (key === 'legacy' || key === 'entities') continue;
+    const val = node[key];
+    if (val && typeof val === 'object') {
+      collectListsFromNode(val, out);
+    }
+  }
+}
+
+/**
+ * 读取当前账号自己的与订阅的 X 列表（只读）。
+ */
+export async function getLists(count = 100): Promise<TwitterList[]> {
+  const resp = await request({
+    method: 'GET',
+    url: `https://${HOST}/i/api/graphql/${LISTS_MANAGEMENT_QUERY_ID}/ListsManagementPageTimeline`,
+    responseType: 'json',
+    query: {
+      features: JSON.stringify(TIMELINE_FEATURES),
+      variables: JSON.stringify({ count }),
+    },
+    headers: getCommonHeaders(),
+  });
+  ensureResponse(resp);
+
+  const instructions = resolveInstructions(resp.body, [
+    ['data', 'viewer', 'list_management_timeline', 'timeline', 'instructions'],
+    ['data', 'viewer', 'lists_timeline', 'timeline', 'instructions'],
+  ]);
+
+  const map = new Map<string, TwitterList>();
+  collectListsFromNode(instructions, map);
+  return Array.from(map.values());
+}
+
+/**
+ * 指定 List 的最新推文时间线。
+ */
+export async function getListTimeline(
+  listId: string,
+  cursor?: string,
+  count = 20,
+): Promise<{
+  twitterPosts: TwitterPost[];
+  cursor: string | null;
+}> {
+  const resp = await request({
+    method: 'GET',
+    url: `https://${HOST}/i/api/graphql/${LIST_TIMELINE_QUERY_ID}/ListLatestTweetsTimeline`,
+    responseType: 'json',
+    query: {
+      features: JSON.stringify(TIMELINE_FEATURES),
+      variables: JSON.stringify({
+        listId,
+        count,
+        ...(cursor ? { cursor } : {}),
+      }),
+    },
+    headers: getCommonHeaders(),
+  });
+  ensureResponse(resp);
+
+  const instructions = resolveInstructions(resp.body, [
+    ['data', 'list', 'tweets_timeline', 'timeline', 'instructions'],
+    ['data', 'list', 'timeline_response', 'timeline', 'instructions'],
+  ]);
+  const tweets = extractTweetResultsFromInstructions(instructions);
+  const nextCursor = extractBottomCursorFromInstructions(instructions);
+  const twitterPosts = mapTwitterPosts(tweets);
+
+  return {
+    twitterPosts,
+    cursor: twitterPosts.length === 0 && !nextCursor ? null : nextCursor,
+  };
+}
+
+/**
+ * 推文详情：主帖 + 会话中带媒体的相关推文。
+ */
+export async function getTweetDetail(tweetId: string): Promise<{
+  twitterPosts: TwitterPost[];
+  cursor: null;
+}> {
+  const resp = await request({
+    method: 'GET',
+    url: `https://${HOST}/i/api/graphql/${TWEET_DETAIL_QUERY_ID}/TweetDetail`,
+    responseType: 'json',
+    query: {
+      features: JSON.stringify(TIMELINE_FEATURES),
+      fieldToggles: JSON.stringify({
+        withArticleRichContentState: true,
+        withArticlePlainText: false,
+        withGrokAnalyze: false,
+      }),
+      variables: JSON.stringify({
+        focalTweetId: tweetId,
+        referrer: 'tweet',
+        with_rux_injections: false,
+        rankingMode: 'Relevance',
+        includePromotedContent: true,
+        withCommunity: true,
+        withQuickPromoteEligibilityTweetFields: true,
+        withBirdwatchNotes: true,
+        withVoice: true,
+      }),
+    },
+    headers: getCommonHeaders(),
+  });
+  ensureResponse(resp);
+
+  const instructions = resolveInstructions(resp.body, [
+    ['data', 'threaded_conversation_with_injections_v2', 'instructions'],
+    ['data', 'threaded_conversation_with_injections', 'instructions'],
+  ]);
+
+  // 线程内不去掉回复，只要求有媒体；不去重 retweet 过滤过严
+  const tweets = extractTweetResultsFromInstructions(instructions, {
+    requireMedia: true,
+    skipRetweet: true,
+  });
+
+  // 去重
+  const seen = new Set<string>();
+  const unique = tweets.filter((t) => {
+    const id = String(t.rest_id);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  return {
+    twitterPosts: mapTwitterPosts(unique),
+    cursor: null,
+  };
+}
+
+/** 取消关注（REST friendships/destroy，Cookie 会话） */
+export async function unfollowUser(userId: string): Promise<void> {
+  const cookieString = useAppStateStore.getState().cookieString;
+  if (!cookieString) {
+    throw new Error('请先登录（配置 Cookie）');
+  }
+  if (!userId) {
+    throw new Error('缺少用户 ID，无法取消关注');
+  }
+
+  const resp = await request({
+    method: 'POST',
+    url: `https://${HOST}/i/api/1.1/friendships/destroy.json`,
+    responseType: 'json',
+    headers: {
+      ...getAuthHeaders(cookieString),
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `user_id=${encodeURIComponent(userId)}`,
+  });
+  ensureResponse(resp);
 }

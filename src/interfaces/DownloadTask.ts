@@ -10,6 +10,8 @@ export interface DownloadTask {
   dir: string;
   totalSize: number;
   completeSize: number;
+  /** 当前下载速度（字节/秒） */
+  downloadSpeed: number;
   status: AriaStatus;
   error?: string;
   updatedAt: number;

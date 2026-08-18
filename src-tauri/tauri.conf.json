@@ -69,7 +69,12 @@
       ],
       "externalBin": [
         "binaries/aria2c"
-      ]
+      ],
+      "windows": {
+        "nsis": {
+          "languages": ["SimpChinese"]
+        }
+      }
     },
     "security": {
       "csp": null

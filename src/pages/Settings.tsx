@@ -3,10 +3,14 @@ import React from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Section } from '../components/settings/Section';
 import { Item } from '../components/settings/Item';
-import { DownloadOutlined, GlobalOutlined } from '@ant-design/icons';
+import {
+  DownloadOutlined,
+  GlobalOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import Joi from 'joi';
 import { SavePathSelector } from '../components/settings/SavePathSelector';
-import { Button, Input, Switch } from 'antd';
+import { Button, Input, InputNumber, Switch } from 'antd';
 import { FileNameTemplateInput } from '../components/settings/FileNameTemplateInput';
 import { showInFolder } from '../utils/shell';
 import { path } from '@tauri-apps/api';
@@ -79,6 +83,26 @@ export const Settings: React.FC = () => {
           description="存在同名文件时，是否跳过下载"
         >
           <Switch />
+        </Item>
+      </Section>
+      <Section title="同步" name="sync" titleIcon={<SyncOutlined />}>
+        <Item
+          settingKey="pageIntervalMs"
+          label="API 翻页间隔"
+          description="关注 / 书签 / 喜欢同步与活跃度探测共用，单位毫秒（800–5000），降低限流风险"
+          validator={(value) => {
+            return Joi.number()
+              .min(800)
+              .max(5000)
+              .messages({
+                'number.min': '间隔不能小于 800ms',
+                'number.max': '间隔不能大于 5000ms',
+                'number.base': '请输入数字',
+              })
+              .validate(value).error?.message;
+          }}
+        >
+          <InputNumber className="w-40" min={800} max={5000} step={100} />
         </Item>
       </Section>
       <Section title="代理" name="proxy" titleIcon={<GlobalOutlined />}>

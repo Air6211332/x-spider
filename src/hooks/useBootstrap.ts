@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { aria2 } from '../utils/aria2';
 import { useFollowingStore } from '../stores/following';
+import { useBookmarksStore } from '../stores/bookmarks';
+import { useLikesStore } from '../stores/likes';
 
 export function useBootstrap() {
   const [ready, setReady] = useState(false);
@@ -28,6 +30,13 @@ export function useBootstrap() {
           name: 'following-db',
           async fn() {
             await useFollowingStore.getState().bootstrap();
+          },
+        },
+        {
+          name: 'media-source-db',
+          async fn() {
+            await useBookmarksStore.getState().bootstrap();
+            await useLikesStore.getState().bootstrap();
           },
         },
       ];

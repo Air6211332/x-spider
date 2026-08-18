@@ -6,9 +6,11 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FixedSizeList } from 'react-window';
 import { DownloadTask } from '../../interfaces/DownloadTask';
 import { useDownloadStore } from '../../stores/download';
+import { formatBytesPerSec } from '../../utils/format-speed';
 import { CreationTasks } from './CreationTasks';
 import { DownloadListItem } from './DownloadListItem';
 import { useEventListener, useMount } from 'ahooks';
+import { AriaStatus } from '../../utils/aria2';
 
 export interface DownloadListProps {
   filter: (task: DownloadTask) => boolean;
@@ -64,6 +66,12 @@ export const DownloadList: React.FC<DownloadListProps> = ({
     return filterTasks(downloadTasks);
   }, [downloadTasks, filterTasks]);
 
+  const totalSpeed = useMemo(() => {
+    return tasks
+      .filter((t) => t.status === AriaStatus.Active)
+      .reduce((sum, t) => sum + (t.downloadSpeed || 0), 0);
+  }, [tasks]);
+
   const pauseAll = async () => {
     await pauseAllDownloadTask();
   };
@@ -102,7 +110,10 @@ export const DownloadList: React.FC<DownloadListProps> = ({
     <div className="flex flex-col grow h-full overflow-hidden pb-4">
       <CreationTasks />
       <section>
-        <span>共 {tasks.length} 个下载任务。</span>
+        <span>
+          共 {tasks.length} 个下载任务。
+          {totalSpeed > 0 ? `合计速度 ${formatBytesPerSec(totalSpeed)}` : ''}
+        </span>
       </section>
       <ul className="flex space-x-2 mt-3">
         {batchActions?.includes('unpauseAll') && (

@@ -10,11 +10,13 @@ export interface AddToAutoDownloadListButtonProps {
   user?: TwitterUser;
   disabled?: boolean;
   size?: 'small' | 'middle' | 'large';
+  /** 按钮文案，默认「添加到清单」 */
+  label?: string;
 }
 
 export const AddToAutoDownloadListButton: React.FC<
   AddToAutoDownloadListButtonProps
-> = ({ user, disabled, size = 'small' }) => {
+> = ({ user, disabled, size = 'small', label = '添加到清单' }) => {
   const { message } = App.useApp();
   const lists = useAutoDownloadStore((s) => s.lists);
   const addMemberToLists = useAutoDownloadStore((s) => s.addMemberToLists);
@@ -91,7 +93,7 @@ export const AddToAutoDownloadListButton: React.FC<
         disabled={disabled || !user}
         icon={<UnorderedListOutlined />}
       >
-        添加到清单
+        {label}
       </Button>
     </Popover>
   );

@@ -2,14 +2,20 @@ import { fs, notification, path } from '@tauri-apps/api';
 import { nanoid } from 'nanoid';
 import * as R from 'ramda';
 import { create } from 'zustand';
-import { CreationTask } from '../interfaces/CreationTask';
+import { CreationTask, CreationTaskKind } from '../interfaces/CreationTask';
 import { DownloadFilter } from '../interfaces/DownloadFilter';
 import { DownloadTask } from '../interfaces/DownloadTask';
 import { TwitterMedia } from '../interfaces/TwitterMedia';
 import { TwitterPost } from '../interfaces/TwitterPost';
 import { TwitterUser } from '../interfaces/TwitterUser';
 import { AriaStatus, aria2 } from '../utils/aria2';
-import { getUserMedias, getUserTweets } from '../twitter/api';
+import {
+  getBookmarks,
+  getLikes,
+  getListTimeline,
+  getUserMedias,
+  getUserTweets,
+} from '../twitter/api';
 import { useSettingsStore } from './settings';
 import { useFavoritesStore } from './favorites';
 import { getDownloadUrl } from '../twitter/utils';
@@ -42,6 +48,7 @@ async function mergeAriaStatusToDownloadTask(
     status: ariaStatus.status,
     completeSize: Number(ariaStatus.completedLength),
     totalSize: Number(ariaStatus.totalLength),
+    downloadSpeed: Number(ariaStatus.downloadSpeed || 0),
     fileName: await path.basename(ariaStatus.files[0].path),
     error: ariaStatus.errorMessage,
     dir: ariaStatus.dir,
@@ -79,6 +86,7 @@ async function prepareDownloadTask({
     status: AriaStatus.Waiting,
     completeSize: 0,
     totalSize: Infinity,
+    downloadSpeed: 0,
     fileName,
     media,
     post,
@@ -119,6 +127,14 @@ export interface DownloadStore {
 
   creationTasks: CreationTask[];
   createCreationTask: (user: TwitterUser, filter: DownloadFilter) => void;
+  /** 书签 / 喜欢 / X 列表等媒体源任务 */
+  createMediaSourceTask: (params: {
+    kind: Exclude<CreationTaskKind, 'user'>;
+    filter: DownloadFilter;
+    user: TwitterUser;
+    listId?: string;
+    listName?: string;
+  }) => void;
   removeCreationTask: (id: string) => void;
   updateCreationTask: (task: CreationTask) => void;
 }
@@ -359,6 +375,7 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
         ...get().creationTasks,
         {
           id,
+          kind: 'user',
           user,
           filter,
           status: 'waiting',
@@ -369,6 +386,27 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
     });
     // 已收藏用户：记录本次一起开始下载的时间（供收藏页排序）
     useFavoritesStore.getState().touchStarted(user.id);
+  },
+  createMediaSourceTask: ({ kind, filter, user, listId, listName }) => {
+    const id = nanoid();
+    const abortController = new AbortController();
+    creationTaskAbortControllerMap.set(id, abortController);
+    set({
+      creationTasks: [
+        ...get().creationTasks,
+        {
+          id,
+          kind,
+          user,
+          filter: { ...filter, source: 'tweets' },
+          listId,
+          listName,
+          status: 'waiting',
+          completeCount: 0,
+          skipCount: 0,
+        },
+      ],
+    });
   },
   removeCreationTask: (id) => {
     const abortController = creationTaskAbortControllerMap.get(id);
@@ -393,7 +431,7 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
 
 async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
   log().info('Run creation task', task);
-  const { filter, user } = task;
+  const { filter, user, kind } = task;
 
   const { batchCreateDownloadTask, updateCreationTask } =
     useDownloadStore.getState();
@@ -407,7 +445,27 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
   const until = filter.dateRange?.[1] || now.clone();
   let nextCursor: string | undefined | null = undefined;
 
-  const getListFn = filter.source === 'medias' ? getUserMedias : getUserTweets;
+  type Fetcher = (
+    id: string,
+    cursor?: string,
+  ) => Promise<{ twitterPosts: TwitterPost[]; cursor: string | null }>;
+
+  let getListFn: Fetcher;
+  switch (kind) {
+    case 'bookmarks':
+      getListFn = (_id, cursor) => getBookmarks(cursor);
+      break;
+    case 'likes':
+      getListFn = (userId, cursor) => getLikes(userId, cursor);
+      break;
+    case 'list':
+      getListFn = (_id, cursor) => getListTimeline(task.listId!, cursor);
+      break;
+    case 'user':
+    default:
+      getListFn = filter.source === 'medias' ? getUserMedias : getUserTweets;
+      break;
+  }
 
   const getMediaCounts = R.reduce((acc: number, elem: TwitterPost) => {
     return acc + (elem.medias?.length || 0);
@@ -418,7 +476,7 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
       return;
     }
 
-    log().info('CreationTask fetching', nextCursor);
+    log().info('CreationTask fetching', kind, nextCursor);
     const { twitterPosts, cursor } = await getListFn(user.id, nextCursor);
     if (abortSignal.aborted) break;
     nextCursor = cursor;
@@ -466,9 +524,9 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
 
       log().info('FilteredMedias', filteredMedias);
       for (const media of filteredMedias) {
-        const task = await prepareDownloadTask({ post, media });
-        log().info('Prepared download task', task);
-        const filePath = await path.join(task.dir, task.fileName);
+        const prepared = await prepareDownloadTask({ post, media });
+        log().info('Prepared download task', prepared);
+        const filePath = await path.join(prepared.dir, prepared.fileName);
         log().info('Resolved file path', filePath);
         if (settings.download.sameFileSkip && (await fs.exists(filePath))) {
           skipCount++;

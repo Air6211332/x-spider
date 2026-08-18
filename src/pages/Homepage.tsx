@@ -6,6 +6,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { PostListGridView } from '../components/homepage/PostListGridView';
 import { DownloadController } from '../components/homepage/DownloadController';
+import { TweetUrlDownload } from '../components/homepage/TweetUrlDownload';
 import { useAppStateStore } from '../stores/app-state';
 import { useFavoritesStore } from '../stores/favorites';
 import { useHomepageStore } from '../stores/homepage';
@@ -97,7 +98,9 @@ export const Homepage: React.FC = () => {
         }
       }
       if (cleaned > 0) {
-        message.success(`已清理 ${cleaned} 个过期账号（探查 ${queue.length} 个）`);
+        message.success(
+          `已清理 ${cleaned} 个过期账号（探查 ${queue.length} 个）`,
+        );
       } else {
         message.info(`未发现过期账号（已探查 ${queue.length} 个）`);
       }
@@ -182,6 +185,7 @@ export const Homepage: React.FC = () => {
                 </span>
               )}
             </Space.Compact>
+            <TweetUrlDownload />
             {searchHistory.length > 0 && (
               <section
                 aria-label="搜索历史"
@@ -246,10 +250,7 @@ export const Homepage: React.FC = () => {
                     )}
                   >
                     {filteredSearchHistory.map((sn) => (
-                      <li
-                        key={sn}
-                        className="group min-w-0 flex items-center"
-                      >
+                      <li key={sn} className="group min-w-0 flex items-center">
                         <Button
                           disabled={userInfo.loading || cleaningExpired}
                           type="link"
