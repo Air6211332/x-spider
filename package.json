@@ -1,7 +1,7 @@
 {
   "name": "x-spider",
   "private": true,
-  "version": "2.3.2",
+  "version": "2.3.3",
   "type": "module",
   "packageManager": "pnpm@9.0.0",
   "license": "GPL-3.0-only",
@@ -64,5 +64,8 @@
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.5",
     "vite": "^5.2.9"
+  },
+  "volta": {
+    "node": "24.13.0"
   }
 }
