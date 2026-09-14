@@ -126,7 +126,11 @@ export interface DownloadStore {
   batchRedownloadTask: (gid: string[]) => Promise<void>;
 
   creationTasks: CreationTask[];
-  createCreationTask: (user: TwitterUser, filter: DownloadFilter) => void;
+  createCreationTask: (
+    user: TwitterUser,
+    filter: DownloadFilter,
+    mode?: CreationTask['mode'],
+  ) => void;
   /** 书签 / 喜欢 / X 列表等媒体源任务 */
   createMediaSourceTask: (params: {
     kind: Exclude<CreationTaskKind, 'user'>;
@@ -366,7 +370,7 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
   },
 
   creationTasks: [],
-  createCreationTask: (user, filter) => {
+  createCreationTask: (user, filter, mode = 'full') => {
     const id = nanoid();
     const abortController = new AbortController();
     creationTaskAbortControllerMap.set(id, abortController);
@@ -378,6 +382,7 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
           kind: 'user',
           user,
           filter,
+          mode,
           status: 'waiting',
           completeCount: 0,
           skipCount: 0,
@@ -432,10 +437,13 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
 async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
   log().info('Run creation task', task);
   const { filter, user, kind } = task;
+  const mode = task.mode || 'full';
+  /** 增量模式必须按本地已存在判定停点，故强制跳过已存在文件 */
+  const shouldSkipExisting =
+    useSettingsStore.getState().download.sameFileSkip || mode === 'incremental';
 
   const { batchCreateDownloadTask, updateCreationTask } =
     useDownloadStore.getState();
-  const settings = useSettingsStore.getState();
 
   let completeCount = 0;
   let skipCount = 0;
@@ -511,6 +519,8 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
     }
 
     const paramsList: CreateDownloadTaskParams[] = [];
+    let pageCandidateCount = 0;
+    let pageExistCount = 0;
 
     for (const post of filteredPosts) {
       const filteredMedias = post.medias!.filter(
@@ -524,13 +534,15 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
 
       log().info('FilteredMedias', filteredMedias);
       for (const media of filteredMedias) {
+        pageCandidateCount++;
         const prepared = await prepareDownloadTask({ post, media });
         log().info('Prepared download task', prepared);
         const filePath = await path.join(prepared.dir, prepared.fileName);
         log().info('Resolved file path', filePath);
-        if (settings.download.sameFileSkip && (await fs.exists(filePath))) {
+        if (shouldSkipExisting && (await fs.exists(filePath))) {
+          pageExistCount++;
           skipCount++;
-          log().info('Skip because sameFileSkip', media);
+          log().info('Skip because file exists', media);
           continue;
         }
         paramsList.push({
@@ -542,17 +554,11 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
 
     log().info('Params', paramsList);
 
-    if (paramsList.length === 0) {
-      updateCreationTask({
-        ...task,
-        completeCount,
-        skipCount,
-      });
-      continue;
+    if (paramsList.length > 0) {
+      await batchCreateDownloadTask(paramsList);
+      completeCount += paramsList.length;
     }
 
-    await batchCreateDownloadTask(paramsList);
-    completeCount += paramsList.length;
     updateCreationTask({
       ...task,
       completeCount,
@@ -560,6 +566,22 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
     });
 
     if (abortSignal.aborted) break;
+
+    // 增量：本页已存在 ≥10，或本页候选全部已存在 → 停止翻页
+    if (
+      mode === 'incremental' &&
+      (pageExistCount >= 10 ||
+        (pageCandidateCount > 0 && pageExistCount === pageCandidateCount))
+    ) {
+      log().info(
+        'Incremental stop',
+        'pageExistCount',
+        pageExistCount,
+        'pageCandidateCount',
+        pageCandidateCount,
+      );
+      break;
+    }
   }
 }
 

@@ -130,7 +130,7 @@ export const FollowingUserCard: React.FC<FollowingUserCardProps> = ({
     }
   };
 
-  const onStartDownload = () => {
+  const onStartDownload = (mode: 'full' | 'incremental') => {
     if (!item.screenName || item.unavailable) {
       message.warning('无法为该账号创建下载任务');
       return;
@@ -140,8 +140,12 @@ export const FollowingUserCard: React.FC<FollowingUserCardProps> = ({
       return;
     }
     try {
-      createCreationTask(followingToTwitterUser(item), filter);
-      message.success('已成功创建下载任务，请到下载管理页查看');
+      createCreationTask(followingToTwitterUser(item), filter, mode);
+      message.success(
+        mode === 'incremental'
+          ? '已成功创建增量下载任务，请到下载管理页查看'
+          : '已成功创建全量下载任务，请到下载管理页查看',
+      );
     } catch (err: any) {
       log.error(err);
       message.error('创建下载任务失败');
@@ -346,9 +350,17 @@ export const FollowingUserCard: React.FC<FollowingUserCardProps> = ({
           type="primary"
           icon={<DownloadOutlined />}
           disabled={item.unavailable || !item.screenName}
-          onClick={onStartDownload}
+          onClick={() => onStartDownload('incremental')}
         >
-          下载
+          增量下载
+        </Button>
+        <Button
+          size="small"
+          icon={<DownloadOutlined />}
+          disabled={item.unavailable || !item.screenName}
+          onClick={() => onStartDownload('full')}
+        >
+          全量下载
         </Button>
         <Button
           size="small"

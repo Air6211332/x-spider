@@ -29,7 +29,7 @@ export const DownloadController: React.FC = () => {
   );
   const favorited = user ? isFavorite(user.id) : false;
 
-  const onStartDownload = async () => {
+  const onStartDownload = async (mode: 'full' | 'incremental') => {
     if (!user) {
       message.error('请先加载用户');
       return;
@@ -41,8 +41,12 @@ export const DownloadController: React.FC = () => {
     }
 
     try {
-      createCreationTask(user, filter);
-      message.success('已成功创建下载任务，请到下载管理页查看');
+      createCreationTask(user, filter, mode);
+      message.success(
+        mode === 'incremental'
+          ? '已成功创建增量下载任务，请到下载管理页查看'
+          : '已成功创建全量下载任务，请到下载管理页查看',
+      );
     } catch (err: any) {
       log.error(err);
       message.error('创建下载任务失败');
@@ -140,9 +144,14 @@ export const DownloadController: React.FC = () => {
       </Form>
       <hr className="my-4" />
       <section className="flex space-x-2">
-        <Button type="primary" onClick={onStartDownload}>
+        <Button type="primary" onClick={() => onStartDownload('incremental')}>
           <Space>
-            <span>开始下载</span>
+            <span>增量下载</span>
+          </Space>
+        </Button>
+        <Button onClick={() => onStartDownload('full')}>
+          <Space>
+            <span>全量下载</span>
           </Space>
         </Button>
         <Button

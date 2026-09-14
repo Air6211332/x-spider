@@ -110,14 +110,18 @@ export const FavoriteUserCard: React.FC<FavoriteUserCardProps> = ({
     }
   };
 
-  const onStartDownload = () => {
+  const onStartDownload = (mode: 'full' | 'incremental') => {
     if (!filter.mediaTypes || filter.mediaTypes.length === 0) {
       message.error('请至少选择一个媒体类型（可在主页下载配置中设置）');
       return;
     }
     try {
-      createCreationTask(favoriteToTwitterUser(item), filter);
-      message.success('已成功创建下载任务，请到下载管理页查看');
+      createCreationTask(favoriteToTwitterUser(item), filter, mode);
+      message.success(
+        mode === 'incremental'
+          ? '已成功创建增量下载任务，请到下载管理页查看'
+          : '已成功创建全量下载任务，请到下载管理页查看',
+      );
     } catch (err: any) {
       log.error(err);
       message.error('创建下载任务失败');
@@ -218,9 +222,16 @@ export const FavoriteUserCard: React.FC<FavoriteUserCardProps> = ({
           size="small"
           type="primary"
           icon={<DownloadOutlined />}
-          onClick={onStartDownload}
+          onClick={() => onStartDownload('incremental')}
         >
-          开始下载
+          增量下载
+        </Button>
+        <Button
+          size="small"
+          icon={<DownloadOutlined />}
+          onClick={() => onStartDownload('full')}
+        >
+          全量下载
         </Button>
         <Button
           size="small"

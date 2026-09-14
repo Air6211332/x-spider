@@ -38,7 +38,7 @@ export const AutoDownload: React.FC = () => {
     message.success('已新增清单');
   };
 
-  const onBatchDownload = (listId: string) => {
+  const onBatchDownload = (listId: string, mode: 'full' | 'incremental') => {
     const list = lists.find((l) => l.id === listId);
     if (!list) return;
     if (!list.members.length) {
@@ -50,9 +50,13 @@ export const AutoDownload: React.FC = () => {
       return;
     }
     for (const member of list.members) {
-      createCreationTask(memberToTwitterUser(member), filter);
+      createCreationTask(memberToTwitterUser(member), filter, mode);
     }
-    message.success(`已为 ${list.members.length} 个账号创建下载任务`);
+    message.success(
+      mode === 'incremental'
+        ? `已为 ${list.members.length} 个账号创建增量下载任务`
+        : `已为 ${list.members.length} 个账号创建全量下载任务`,
+    );
   };
 
   return (
@@ -68,11 +72,7 @@ export const AutoDownload: React.FC = () => {
             className="max-w-xs"
             maxLength={40}
           />
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={onCreateList}
-          >
+          <Button type="primary" icon={<PlusOutlined />} onClick={onCreateList}>
             新增清单
           </Button>
         </div>
@@ -95,9 +95,16 @@ export const AutoDownload: React.FC = () => {
                       type="primary"
                       size="small"
                       disabled={list.members.length === 0}
-                      onClick={() => onBatchDownload(list.id)}
+                      onClick={() => onBatchDownload(list.id, 'incremental')}
                     >
-                      一键添加下载
+                      增量下载
+                    </Button>
+                    <Button
+                      size="small"
+                      disabled={list.members.length === 0}
+                      onClick={() => onBatchDownload(list.id, 'full')}
+                    >
+                      全量下载
                     </Button>
                     <Button
                       size="small"

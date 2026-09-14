@@ -38,6 +38,11 @@ export const CreationTasks: React.FC = () => {
                     : t.kind === 'list'
                       ? `列表：${t.listName || t.user?.name || t.listId}`
                       : `${t.user?.name || '未知用户'} ${t.user?.screenName ? `@${t.user.screenName}` : ''}`}
+                {t.kind === 'user' && (
+                  <span className="ml-1 text-gray-400">
+                    [{t.mode === 'incremental' ? '增量' : '全量'}]
+                  </span>
+                )}
               </span>
             </a>
             <div className="flex items-center space-x-2 shrink-0">
