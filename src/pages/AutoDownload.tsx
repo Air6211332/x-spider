@@ -38,6 +38,8 @@ export const AutoDownload: React.FC = () => {
     message.success('已新增清单');
   };
 
+  const totalMemberCount = lists.reduce((n, l) => n + l.members.length, 0);
+
   const onBatchDownload = (listId: string, mode: 'full' | 'incremental') => {
     const list = lists.find((l) => l.id === listId);
     if (!list) return;
@@ -59,6 +61,36 @@ export const AutoDownload: React.FC = () => {
     );
   };
 
+  /** 全部清单账号按 id 去重后创建增量下载任务 */
+  const onDownloadAll = () => {
+    if (!filter.mediaTypes || filter.mediaTypes.length === 0) {
+      message.error('请至少选择一个媒体类型（可在主页下载配置中设置）');
+      return;
+    }
+    const seen = new Set<string>();
+    const unique: (typeof lists)[number]['members'] = [];
+    for (const list of lists) {
+      for (const member of list.members) {
+        if (seen.has(member.id)) continue;
+        seen.add(member.id);
+        unique.push(member);
+      }
+    }
+    if (unique.length === 0) {
+      message.warning('暂无账号可下载');
+      return;
+    }
+    for (const member of unique) {
+      createCreationTask(memberToTwitterUser(member), filter, 'incremental');
+    }
+    const deduped = totalMemberCount - unique.length;
+    message.success(
+      deduped > 0
+        ? `已为 ${unique.length} 个账号创建增量下载任务（已去重 ${deduped} 个）`
+        : `已为 ${unique.length} 个账号创建增量下载任务`,
+    );
+  };
+
   return (
     <div className="flex flex-col h-screen">
       <PageHeader />
@@ -74,6 +106,9 @@ export const AutoDownload: React.FC = () => {
           />
           <Button type="primary" icon={<PlusOutlined />} onClick={onCreateList}>
             新增清单
+          </Button>
+          <Button disabled={totalMemberCount === 0} onClick={onDownloadAll}>
+            一键下载
           </Button>
         </div>
 
